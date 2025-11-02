@@ -1,0 +1,78 @@
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from math import sqrt
+import heapq
+
+@dataclass
+class Asset:
+    ticker: str
+    name: str
+    exp_return: float  
+    vol: float          
+    rf: float = 3.0     
+
+    @property
+    def sharpe(self) -> float:
+        
+        if self.vol == 0:
+            return 0.0
+        return (self.exp_return - self.rf) / self.vol
+
+
+universe: List[Asset] = [
+    Asset("AAPL", "Apple", 11.5, 18.0),
+    Asset("MSFT", "Microsoft", 10.2, 15.0),
+    Asset("TSLA", "Tesla", 16.0, 35.0),
+    Asset("NVDA", "NVIDIA", 18.5, 40.0),
+    Asset("KO",   "Coca-Cola", 7.0, 12.0),
+    Asset("TLT",  "US 20Y Treasury ETF", 5.0, 9.5),
+]
+
+
+def sort_assets(assets: List[Asset], by: str = "exp_return", reverse: bool = True) -> List[Asset]:
+    keyfunc = {
+        "exp_return": lambda a: a.exp_return,
+        "vol":        lambda a: a.vol,
+        "sharpe":     lambda a: a.sharpe
+    }.get(by, lambda a: a.exp_return)
+    return sorted(assets, key=keyfunc, reverse=reverse) 
+
+
+def top_n(assets: List[Asset], by: str = "sharpe", n: int = 3) -> List[Asset]:
+    keyfunc = {
+        "exp_return": lambda a: a.exp_return,
+        "vol":        lambda a: -a.vol,   
+        "sharpe":     lambda a: a.sharpe
+    }.get(by, lambda a: a.sharpe)
+    return heapq.nlargest(n, assets, key=keyfunc)
+
+
+class Index:
+    def __init__(self, assets: List[Asset]):
+        self.by_ticker: Dict[str, Asset] = {a.ticker: a for a in assets}
+        self.by_name:   Dict[str, Asset] = {a.name.lower(): a for a in assets}
+
+    def find(self, q: str) -> Optional[Asset]:
+        if q in self.by_ticker:
+            return self.by_ticker[q]
+        return self.by_name.get(q.lower())
+
+
+def rebalance_proposal(assets: List[Asset], by: str = "sharpe", n: int = 3) -> Dict[str, float]:
+    candidates = top_n(assets, by=by, n=n)
+    w = round(1.0 / n, 4)
+    return {a.ticker: w for a in candidates}
+
+
+if __name__ == "__main__":
+    print("▶ Sharpe 순 정렬 상위 5:")
+    for a in sort_assets(universe, by="sharpe")[:5]:
+        print(f"{a.ticker:5}  Sharpe={a.sharpe:.3f}  ExpRet={a.exp_return:.1f}%  Vol={a.vol:.1f}%")
+
+    idx = Index(universe)
+    q = "NVDA"
+    found = idx.find(q)
+    print(f"\n▶ 탐색 '{q}':", f"{found.ticker} {found.name} ExpRet={found.exp_return} Vol={found.vol}" if found else "결과 없음")
+
+    print("\n▶ 리밸런싱 제안(Sharpe 상위 3 동일비중):")
+    print(rebalance_proposal(universe, by="sharpe", n=3))
